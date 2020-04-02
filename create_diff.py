@@ -26,16 +26,20 @@ NEW_FILE_NAME = git_res[0]['filename']\
 curDir = os.getcwd()
 repo = Repo(curDir)
 
+PR_URL = GIT_BASE_PR_URL.replace('api.', '')\
+    .replace('/repos', '')\
+    .replace('pulls', 'pull')
+
 en_res = requests.get(EN_FILE_URL)
 f = open(f'{curDir}/{NEW_FILE_NAME}', "wb")
 f.write(en_res.content)
 f.close()
 repo.index.add(NEW_FILE_NAME)
-repo.index.commit(f'#{PR_NUM} : add original {NEW_FILE_NAME}\n\n- PR url : {GIT_BASE_PR_URL}\n- file url : {EN_FILE_URL}')
+repo.index.commit(f'#{PR_NUM} : add original {NEW_FILE_NAME}\n\n- PR url : {PR_URL}\n- file url : {EN_FILE_URL}')
 
 ko_res = requests.get(KO_FILE_URL)
 f = open(f'{curDir}/{NEW_FILE_NAME}', "wb")
 f.write(ko_res.content)
 f.close()
 repo.index.add(NEW_FILE_NAME)
-repo.index.commit(f'#{PR_NUM} : update translated {NEW_FILE_NAME}\n\n- PR url : {GIT_BASE_PR_URL}\n- file url : {KO_FILE_URL}')
+repo.index.commit(f'#{PR_NUM} : update translated {NEW_FILE_NAME}\n\n- PR url : {PR_URL}\n- file url : {KO_FILE_URL}')
