@@ -1,12 +1,5 @@
 ---
-reviewers:
-- saad-ali
-- thockin
-- msau42
-- jingxu97
-- xing-yang
-- yuxiangqian
-title: Volume Snapshots
+title: 볼륨 스냅샷
 content_template: templates/concept
 weight: 20
 ---
@@ -14,64 +7,76 @@ weight: 20
 {{% capture overview %}}
 
 {{< feature-state for_k8s_version="1.17" state="beta" >}}
-In Kubernetes, a _VolumeSnapshot_ represents a snapshot of a volume on a storage system. This document assumes that you are already familiar with Kubernetes [persistent volumes](/docs/concepts/storage/persistent-volumes/).
+이 문서에서는 쿠버네티스의 스토리지 시스템 볼륨 스냅샷인 _VolumeSnapshot_ 을 설명한다.
+[퍼시스턴트 볼륨](/docs/concepts/storage/persistent-volumes/)의 숙지를 추천한다.
 
 {{% /capture %}}
 
 
 {{% capture body %}}
 
-## Introduction
+## 소개
 
-Similar to how API resources `PersistentVolume` and `PersistentVolumeClaim` are used to provision volumes for users and administrators, `VolumeSnapshotContent` and `VolumeSnapshot` API resources are provided to create volume snapshots for users and administrators.
+API 리소스 `PersistentVolume` 및 `PersistentVolumeClaim` 가 사용자 및 관리자가 볼륨을 프로비전할 때의 방법과 유사하게, `VolumeSnapshotContent` 및 `VolumeSnapshot` API 리소스는 볼륨 스냅샷을 생성하기 위해 제공된다.
 
-A `VolumeSnapshotContent` is a snapshot taken from a volume in the cluster that has been provisioned by an administrator. It is a resource in the cluster just like a PersistentVolume is a cluster resource.
+`VolumeSnapshotContent` 는 관리자가 프로버져닝한 클러스터 볼륨에서의 스냅샷이다.
+퍼시스턴트 볼륨이 클러스터 리소스인 것처럼 이것 또한 클러스터 리소스이다.
 
-A `VolumeSnapshot` is a request for snapshot of a volume by a user. It is similar to a PersistentVolumeClaim.
+`VolumeSnapshot` 은 사용자가 볼륨의 스냅샷을 요청할 수 있는 방법이다. 이는 퍼시스턴트 볼륨 클레임과 유사하다.
 
-`VolumeSnapshotClass` allows you to specify different attributes belonging to a `VolumeSnapshot`. These attibutes may differ among snapshots taken from the same volume on the storage system and therefore cannot be expressed by using the same `StorageClass` of a `PersistentVolumeClaim`.
+`VolumeSnapshotClass` 을 사용하면 `VolumeSnapshot` 에 속한 다른 속성을 지정할 수 있다.
+이러한 속성은 스토리지 시스템에의 동일한 볼륨에서 가져온 스냅샷마다 다를 수 있으므로 `PersistentVolumeClaim` 의 `StorageClass` 를 사용하여 표현할 수는 없다.
 
-Users need to be aware of the following when using this feature:
+사용자는 이 기능을 사용할 때 다음 사항을 알고 있어야 한다.
 
-* API Objects `VolumeSnapshot`, `VolumeSnapshotContent`, and `VolumeSnapshotClass` are {{< glossary_tooltip term_id="CustomResourceDefinition" text="CRDs" >}}, not part of the core API.
-* `VolumeSnapshot` support is only available for CSI drivers.
-* As part of the deployment process in the beta version of `VolumeSnapshot`, the Kubernetes team provides a snapshot controller to be deployed into the control plane, and a sidecar helper container called csi-snapshotter to be deployed together with the CSI driver.  The snapshot controller watches `VolumeSnapshot` and `VolumeSnapshotContent` objects and is responsible for the creation and deletion of `VolumeSnapshotContent` object in dynamic provisioning.  The sidecar csi-snapshotter watches `VolumeSnapshotContent` objects and triggers `CreateSnapshot` and `DeleteSnapshot` operations against a CSI endpoint.
-* CSI drivers may or may not have implemented the volume snapshot functionality. The CSI drivers that have provided support for volume snapshot will likely use the csi-snapshotter. See [CSI Driver documentation](https://kubernetes-csi.github.io/docs/) for details.
-* The CRDs and snapshot controller installations are the responsibility of the Kubernetes distribution.
+* API 객체인 `VolumeSnapshot`, `VolumeSnapshotContent`, `VolumeSnapshotClass` 는 핵심 API가 아닌, {{< glossary_tooltip term_id="CustomResourceDefinition" text="CRDs" >}}이다.
+* `VolumeSnapshot` 은 CSI 드라이버에서만 사용할 수 있다.
+* 쿠버네티스 팀은 `VolumeSnapshot` 베타 버젼의 배포 프로세스 일부로써, 컨트롤 플레인에 배포할 스냅샷 컨트롤러와 CSI 드라이버와 함께 배포할 csi-snapshotter라는 사이드카 헬퍼(helper) 컨테이너를 제공한다. 스냅샷 컨트롤러는 `VolumeSnapshot` 및 `VolumeSnapshotContent` 오브젝트를 관찰하고 동적 프로비저닝에서 `VolumeSnapshotContent` 오브젝트의 생성 및 삭제를 할 수 있다.사이드카 csi-snapshotter는 `VolumeSnapshotContent` 오브젝트를 관찰하고 CSI 엔드포인트에 대해 `CreateSnapshot` 및 `DeleteSnapshot` 을 트리거(trigger)한다.
+* CSI 드라이버에서의 볼륨 스냅샷 기능 유무는 확실하지 않다. 볼륨 스냅샷 서포트를 제공하는 CSI 드라이버는 csi-snapshotter를 사용한다. 자세한 사항은 이곳에서 확인하면 된다. [CSI 드라이버 문서](https://kubernetes-csi.github.io/docs/)
+* CRD 및 스냅샷 컨트롤러는 쿠버네티스 배포 시 설치된다.
 
-## Lifecycle of a volume snapshot and volume snapshot content
+## 볼륨 스냅샷 및 볼륨 스냅샷 컨텐츠의 라이프사이클
 
-`VolumeSnapshotContents` are resources in the cluster. `VolumeSnapshots` are requests for those resources. The interaction between `VolumeSnapshotContents` and `VolumeSnapshots` follow this lifecycle:
+`VolumeSnapshotContents` 은 클러스터 리소스이다. `VolumeSnapshots` 은 이러한 리소스의 요청이다.
+`VolumeSnapshotContents` 과 `VolumeSnapshots`의 상호 작용은 다음과 같은 라이프사이클을 따른다:
 
-### Provisioning Volume Snapshot
+### 프로비저닝 볼륨 스냅샷
 
-There are two ways snapshots may be provisioned: pre-provisioned or dynamically provisioned.
+스냅샷을 프로비저닝할 수 있는 두가지 방법이 있다: 사전 프로비저닝 혹은 동적 프로비저닝.
 
-#### Pre-provisioned {#static}
-A cluster administrator creates a number of `VolumeSnapshotContents`. They carry the details of the real volume snapshot on the storage system which is available for use by cluster users. They exist in the Kubernetes API and are available for consumption.
+#### 사전 프로비전 {#static}
+클러스터 관리자는 많은 `VolumeSnapshotContents` 을 생성한다. 그들은 클러스터 사용자들이 사용 가능한 스토리지 시스템의 실제 볼륨 스냅샷 세부 정보를 제공한다.
+이것은 쿠버네티스 API에 있고 사용 가능하다.
 
-#### Dynamic
-Instead of using a pre-existing snapshot, you can request that a snapshot to be dynamically taken from a PersistentVolumeClaim. The [VolumeSnapshotClass](/docs/concepts/storage/volume-snapshot-classes/) specifies storage provider-specific parameters to use when taking a snapshot.
+#### 동적
+사전 프로비저닝을 사용하는 대신 PersistentVolumeClaim에서 스냅샷을 동적으로 가져오도록 요청할 수 있다.
+[볼륨 스냅샷 클래스](/docs/concepts/storage/volume-snapshot-classes/)는 스냅샷 사용 시 스토리지 제공자의 특정 파라미터를 명세한다.
 
-### Binding
+### 바인딩
 
-The snapshot controller handles the binding of a `VolumeSnapshot` object with an appropriate `VolumeSnapshotContent` object, in both pre-provisioned and dynamically provisioned scenarios. The binding is a one-to-one mapping.
+스냅샷 컨트롤러는 사전 프로비저닝과 동적 프로비저닝된 시나리오에서 `VolumeSnapshot` 오브젝트와 적절한 `VolumeSnapshotContent` 오브젝트와의 바인딩을 처리한다.
+바이딩은 1:1 매핑이다.
 
-In the case of pre-provisioned binding, the VolumeSnapshot will remain unbound until the requested VolumeSnapshotContent object is created.
+사전 프로비저닝된 경우, 볼륨 스냅샷은 볼륨 스냅샷 컨텐츠 오브젝트 생성이 요청될 때까지 바인드되지 않은 상태로 유지된다.
 
-### Persistent Volume Claim as Snapshot Source Protection
+### 스냅샷 소스 보호로서의 퍼시스턴트 볼륨 클레임
 
-The purpose of this protection is to ensure that in-use PersistentVolumeClaim API objects are not removed from the system while a snapshot is being taken from it (as this may result in data loss).
+보호의 목적은 스냅샷이 생성되는 동안 사용중인 퍼시스턴트 볼륨 클레임 API 오브젝트가 시스템에서 지워지지 않게 하는 것이다.
+(데이터 손실이 발생할 수 있기 때문에)
 
-While a snapshot is being taken of a PersistentVolumeClaim, that PersistentVolumeClaim is in-use. If you delete a PersistentVolumeClaim API object in active use as a snapshot source, the PersistentVolumeClaim object is not removed immediately. Instead, removal of the PersistentVolumeClaim object is postponed until the snapshot is readyToUse or aborted.
+퍼시스턴트 볼륨 클레임이 스냅샷을 생성할 동안에는 해당 퍼시스턴트 볼륨 클레임은 사용중인 상태다.
+스냅샷 소스로 사용 중인 퍼시스턴트 볼륨 클레임 API 객체를 삭제한다면, 퍼시스턴트 볼륨 클레임 객체는 즉시 삭제되지 않는다.
+대신, 퍼시스턴트 볼륨 클레임 객체 삭제는 스냅샷이 readyTouse 혹은 aborted 상태가 될 때까지 연기된다.
 
-### Delete
+### 삭제
 
-Deletion is triggered by deleting the `VolumeSnapshot` object, and the `DeletionPolicy` will be followed. If the `DeletionPolicy` is `Delete`, then the underlying storage snapshot will be deleted along with the `VolumeSnapshotContent` object. If the `DeletionPolicy` is `Retain`, then both the underlying snapshot and `VolumeSnapshotContent` remain.
+삭제는 `VolumeSnapshot` 를 삭제 시 트리거(trigger)로 `DeletionPolicy` 가 실행된다.
+`DeletionPolicy` 가 `Delete` 라면, 기본 스토리지 스냅샷이 `VolumeSnapshotContent` 오브젝트와 함께 삭제될 것이고,
+`DeletionPolicy` 이 `Retain` 라면, 기본 스트리지 스냅샷과 `VolumeSnapshotContent` 둘 다 유지된다.
 
-## VolumeSnapshots
+## 볼륨 스냅샷
 
-Each VolumeSnapshot contains a spec and a status.
+볼륨 스냅샷 각각은 스펙과 상태를 포함한다.
 
 ```yaml
 apiVersion: snapshot.storage.k8s.io/v1beta1
@@ -84,13 +89,12 @@ spec:
     persistentVolumeClaimName: pvc-test
 ```
 
-`persistentVolumeClaimName` is the name of the PersistentVolumeClaim data source for the snapshot. This field is required for dynamically provisioning a snapshot.
+`persistentVolumeClaimName` 은 스냅샷을 위한 퍼시스턴트 볼륨 클레인 데이터 소스의 이름이다. 이 필드는 스냅샷 동적 프로비저닝이 필요하다.
 
-A volume snapshot can request a particular class by specifying the name of a
-[VolumeSnapshotClass](/docs/concepts/storage/volume-snapshot-classes/)
-using the attribute `volumeSnapshotClassName`. If nothing is set, then the default class is used if available.
+볼륨 스냅샷은 `volumeSnapshotClassName` 속성을 사용하여 [볼륨 스냅샷 클래스](/docs/concepts/storage/volume-snapshot-classes/)의 이름을 지정하여 특정 클래스를 요청할 수 있다. 아무것도 설정하지 않으면, 사용 가능한 경우 기본 클래스가 사용될 것이다.
 
-For pre-provisioned snapshots, you need to specify a `volumeSnapshotContentName` as the source for the snapshot as shown in the following example. The `volumeSnapshotContentName` source field is required for pre-provisioned snapshots.
+사전 프로비저닝된 스냅샷의 경우, 다음 예와 같이 `volumeSnapshotContentName`을 스냅샷 소스로 지정해야 한다.
+사전 프로비저닝된 스냅샷에는 `volumeSnapshotContentName` 소스 필드가 필요하다.
 
 ```
 apiVersion: snapshot.storage.k8s.io/v1beta1
@@ -102,9 +106,9 @@ spec:
         volumeSnapshotContentName: test-content
 ```
 
-## Volume Snapshot Contents
+## 볼륨 스냅샷 콘텐츠
 
-Each VolumeSnapshotContent contains a spec and status. In dynamic provisioning, the snapshot common controller creates `VolumeSnapshotContent` objects. Here is an example:
+각각의 볼륨 스냅샷 콘텐츠는 스펙과 상태를 포함한다. 동적 프로비저닝에서는, 스냅샷 공통 컨트롤러는 `VolumeSnapshotContent` 오브젝트를 생성한다. 예시는 다음과 같다.
 
 ```yaml
 apiVersion: snapshot.storage.k8s.io/v1beta1
@@ -123,9 +127,10 @@ spec:
     uid: 72d9a349-aacd-42d2-a240-d775650d2455
 ```
 
-`volumeHandle` is the unique identifier of the volume created on the storage backend and returned by the CSI driver during the volume creation. This field is required for dynamically provisioning a snapshot. It specifies the volume source of the snapshot.
+`volumeHandle` 은 스토리지 백엔드에서 생성되고 볼륨 생성 중에 CSI 드라이버가 반환하는 볼륨의 고유 식별자이다.
+이 필드는 스냅샷을 동적 프로비저닝하는 데 필요하다. 이것은 스냅샷의 볼륨 소스를 지정한다.
 
-For pre-provisioned snapshots, you (as cluster administrator) are responsible for creating the `VolumeSnapshotContent` object as follows.
+사전 프로비저닝된 스냅샷의 경우, (클러스터 관리자로서) 다음과 같이 `VolumeSnapshotContent` 오브젝트를 작성해야 한다.
 
 ```yaml
 apiVersion: snapshot.storage.k8s.io/v1beta1
@@ -142,14 +147,14 @@ spec:
     namespace: default
 ```
 
-`snapshotHandle` is the unique identifier of the volume snapshot created on the storage backend. This field is required for the pre-provisioned snapshots. It specifies the CSI snapshot id on the storage system that this `VolumeSnapshotContent` represents.
+`snapshotHandle` 은 스토리지 백엔드에서 생성된 볼륨 스냅샷의 고유 식별자이다. 이 필드는 사전 프로비저닝된 스냅샷에 필요하다.
+`VolumeSnapshotContent` 가 나타내는 스토리지 시스템의 CSI 스냅샷 id를 지정한다.
 
-## Provisioning Volumes from Snapshots
+## 스냅샷을 위한 프로비저닝 볼륨
 
-You can provision a new volume, pre-populated with data from a snapshot, by using
-the *dataSource* field in the `PersistentVolumeClaim` object.
+`PersistentVolumeClaim` 오브젝트의 *dataSource* 필드를 사용하여 스냅샷 데이터로 미리 채워진 새 볼륨을 프로비저닝할 수 있다.
 
-For more details, see
-[Volume Snapshot and Restore Volume from Snapshot](/docs/concepts/storage/persistent-volumes/#volume-snapshot-and-restore-volume-from-snapshot-support).
+보다 자세한 사항은
+[볼륨 스냅샷 및 스냅샷에서 볼륨 복원](/docs/concepts/storage/persistent-volumes/#volume-snapshot-and-restore-volume-from-snapshot-support)에서 확인할 수 있다.
 
 {{% /capture %}}
