@@ -1,8 +1,5 @@
 ---
-reviewers:
-- pweil-
-- tallclair
-title: Pod Security Policies
+title: 파드 보안 정책
 content_template: templates/concept
 weight: 20
 ---
@@ -11,80 +8,77 @@ weight: 20
 
 {{< feature-state state="beta" >}}
 
-Pod Security Policies enable fine-grained authorization of pod creation and
-updates.
+파드 보안 정책을 사용하면 파드 생성 및 업데이트에 대한 세분화된 권한을 부여할 수 있다.
 
 {{% /capture %}}
 
 
 {{% capture body %}}
 
-## What is a Pod Security Policy?
+## 파드 보안 정책이란?
 
-A _Pod Security Policy_ is a cluster-level resource that controls security
-sensitive aspects of the pod specification. The [PodSecurityPolicy](/docs/reference/generated/kubernetes-api/{{< param "version" >}}/#podsecuritypolicy-v1beta1-policy) objects
-define a set of conditions that a pod must run with in order to be accepted into
-the system, as well as defaults for the related fields. They allow an
-administrator to control the following:
+_Pod Security Policy_ 는 파드 명세의 보안 관련 측면을 제어하는 ​​클러스터-레벨의
+리소스이다. [PodSecurityPolicy](/docs/reference/generated/kubernetes-api/{{< param "version" >}}/#podsecuritypolicy-v1beta1-policy) 오브젝트는
+관련 필드에 대한 기본값뿐만 아니라 시스템에 적용하기 위해 파드가 실행해야 하는
+조건 셋을 정의한다. 관리자는
+다음을 제어할 수 있다.
 
 | Control Aspect                                      | Field Names                                 |
 | ----------------------------------------------------| ------------------------------------------- |
-| Running of privileged containers                    | [`privileged`](#privileged)                                |
-| Usage of host namespaces                            | [`hostPID`, `hostIPC`](#host-namespaces)    |
-| Usage of host networking and ports                  | [`hostNetwork`, `hostPorts`](#host-namespaces) |
-| Usage of volume types                               | [`volumes`](#volumes-and-file-systems)      |
-| Usage of the host filesystem                        | [`allowedHostPaths`](#volumes-and-file-systems) |
-| White list of FlexVolume drivers                    | [`allowedFlexVolumes`](#flexvolume-drivers) |
-| Allocating an FSGroup that owns the pod's volumes   | [`fsGroup`](#volumes-and-file-systems)      |
-| Requiring the use of a read only root file system   | [`readOnlyRootFilesystem`](#volumes-and-file-systems) |
-| The user and group IDs of the container             | [`runAsUser`, `runAsGroup`, `supplementalGroups`](#users-and-groups) |
-| Restricting escalation to root privileges           | [`allowPrivilegeEscalation`, `defaultAllowPrivilegeEscalation`](#privilege-escalation) |
-| Linux capabilities                                  | [`defaultAddCapabilities`, `requiredDropCapabilities`, `allowedCapabilities`](#capabilities) |
-| The SELinux context of the container                | [`seLinux`](#selinux)                       |
-| The Allowed Proc Mount types for the container      | [`allowedProcMountTypes`](#allowedprocmounttypes) |
-| The AppArmor profile used by containers             | [annotations](#apparmor)                    |
-| The seccomp profile used by containers              | [annotations](#seccomp)                     |
-| The sysctl profile used by containers               | [`forbiddenSysctls`,`allowedUnsafeSysctls`](#sysctl)                      |
+| 특권을 가진 컨테이너의 실행                                | [`privileged`](#privileged)                                |
+| 호스트 네임스페이스의 사용                                 | [`hostPID`, `hostIPC`](#host-namespaces)    |
+| 호스트 네트워킹과 포트의 사용                               | [`hostNetwork`, `hostPorts`](#host-namespaces) |
+| 볼륨 유형의 사용                                        | [`volumes`](#volumes-and-file-systems)      |
+| 호스트 파일시스템의 사용                                  | [`allowedHostPaths`](#volumes-and-file-systems) |
+| FlexVolume 드라이버의 화이트리스트                         | [`allowedFlexVolumes`](#flexvolume-drivers) |
+| 파드 볼륨을 소유한 FSGroup 할당                           | [`fsGroup`](#volumes-and-file-systems)      |
+| 읽기 전용 루트 파일시스템 사용 필요                          | [`readOnlyRootFilesystem`](#volumes-and-file-systems) |
+| 컨테이너의 사용자 및 그룹 ID                               | [`runAsUser`, `runAsGroup`, `supplementalGroups`](#users-and-groups) |
+| 루트 특권으로의 에스컬레이션 제한                            | [`allowPrivilegeEscalation`, `defaultAllowPrivilegeEscalation`](#privilege-escalation) |
+| 리눅스 기능                                             | [`defaultAddCapabilities`, `requiredDropCapabilities`, `allowedCapabilities`](#capabilities) |
+| 컨테이너의 SELinux 컨텍스트                               | [`seLinux`](#selinux)                       |
+| 컨테이너에 허용된 Proc 마운트 유형                           | [`allowedProcMountTypes`](#allowedprocmounttypes) |
+| 컨테이너가 사용하는 AppArmor 프로파일                        | [어노테이션](#apparmor)                    |
+| 컨테이너가 사용하는 seccomp 프로파일                         | [어노테이션](#seccomp)                     |
+| 컨테이너가 사용하는 sysctl 프로파일                          | [`forbiddenSysctls`,`allowedUnsafeSysctls`](#sysctl)                      |
 
 
-## Enabling Pod Security Policies
+## 파드 보안 정책 활성화
 
-Pod security policy control is implemented as an optional (but recommended)
-[admission
-controller](/docs/reference/access-authn-authz/admission-controllers/#podsecuritypolicy). PodSecurityPolicies
-are enforced by [enabling the admission
-controller](/docs/reference/access-authn-authz/admission-controllers/#how-do-i-turn-on-an-admission-control-plug-in),
-but doing so without authorizing any policies **will prevent any pods from being
-created** in the cluster.
+파드 보안 정책 제어는 선택 사항(하지만 권장함)인
+[어드미션 컨트롤러](/docs/reference/access-authn-authz/admission-controllers/#podsecuritypolicy)로
+구현된다. [어드미션 컨트롤러 활성화](/docs/reference/access-authn-authz/admission-controllers/#how-do-i-turn-on-an-admission-control-plug-in)하면
+PodSecurityPolicy가 적용되지만
+정책을 승인하지 않고 활성화하면 클러스터에
+**파드가 생성되지 않는다.**
 
-Since the pod security policy API (`policy/v1beta1/podsecuritypolicy`) is
-enabled independently of the admission controller, for existing clusters it is
-recommended that policies are added and authorized before enabling the admission
-controller.
+파드 보안 정책 API(`policy/v1beta1/podsecuritypolicy`)는
+어드미션 컨트롤러와 독립적으로 활성화되므로 기존 클러스터의 경우
+어드미션 컨트롤러를 활성화하기 전에 정책을 추가하고 권한을
+부여하는 것이 좋다.
 
-## Authorizing Policies
+## 정책 승인
 
-When a PodSecurityPolicy resource is created, it does nothing. In order to use
-it, the requesting user or target pod's [service
-account](/docs/tasks/configure-pod-container/configure-service-account/) must be
-authorized to use the policy, by allowing the `use` verb on the policy.
+PodSecurityPolicy 리소스가 생성되면 아무 것도 수행하지 않는다. 이를 사용하려면
+요청 사용자 또는 대상 파드의
+[서비스 어카운트](/docs/tasks/configure-pod-container/configure-service-account/)는
+정책에서 `use` 동사를 허용하여 정책을 사용할 권한이 있어야 한다.
 
-Most Kubernetes pods are not created directly by users. Instead, they are
-typically created indirectly as part of a
-[Deployment](/docs/concepts/workloads/controllers/deployment/),
-[ReplicaSet](/docs/concepts/workloads/controllers/replicaset/), or other
-templated controller via the controller manager. Granting the controller access
-to the policy would grant access for *all* pods created by that controller,
-so the preferred method for authorizing policies is to grant access to the
-pod's service account (see [example](#run-another-pod)).
+대부분의 쿠버네티스 파드는 사용자가 직접 만들지 않는다. 대신 일반적으로
+컨트롤러 관리자를 통해
+[디플로이먼트](/ko/docs/concepts/workloads/controllers/deployment/),
+[레플리카셋](/ko/docs/concepts/workloads/controllers/replicaset/), 또는 기타
+템플릿 컨트롤러의 일부로 간접적으로 생성된다. 컨트롤러에 정책에 대한 접근 권한을 부여하면
+해당 컨트롤러에 의해 생성된 *모든* 파드에 대한 접근 권한이 부여되므로 정책을 승인하는
+기본 방법은 파드의 서비스 어카운트에 대한 접근 권한을 부여하는 것이다([예](#다른-파드를-실행) 참고).
 
-### Via RBAC
+### RBAC을 통한 방법
 
-[RBAC](/docs/reference/access-authn-authz/rbac/) is a standard Kubernetes
-authorization mode, and can easily be used to authorize use of policies.
+[RBAC](/docs/reference/access-authn-authz/rbac/)은 표준 쿠버네티스 권한 부여 모드이며
+정책 사용 권한을 부여하는 데 쉽게 사용할 수 있다.
 
-First, a `Role` or `ClusterRole` needs to grant access to `use` the desired
-policies. The rules to grant access look like this:
+먼저 `Role` 또는 `ClusterRole`은 원하는 정책을 `use` 하려면 접근 권한을 부여해야 한다.
+접근 권한을 부여하는 규칙은 다음과 같다.
 
 ```yaml
 apiVersion: rbac.authorization.k8s.io/v1
@@ -99,7 +93,7 @@ rules:
   - <list of policies to authorize>
 ```
 
-Then the `(Cluster)Role` is bound to the authorized user(s):
+그런 다음 `(Cluster)Role`이 승인된 사용자에게 바인딩된다.
 
 ```yaml
 apiVersion: rbac.authorization.k8s.io/v1
@@ -121,9 +115,9 @@ subjects:
   name: <authorized user name>
 ```
 
-If a `RoleBinding` (not a `ClusterRoleBinding`) is used, it will only grant
-usage for pods being run in the same namespace as the binding. This can be
-paired with system groups to grant access to all pods run in the namespace:
+`RoleBinding`(`ClusterRoleBinding` 아님)을 사용하는 경우 바인딩과 동일한 네임스페이스에서
+실행되는 파드에 대해서만 사용 권한을 부여한다. 네임스페이스에서 실행되는 모든 파드에 접근 권한을
+부여하기 위해 시스템 그룹과 쌍을 이룰 수 있다.
 ```yaml
 # Authorize all service accounts in a namespace:
 - kind: Group
@@ -135,49 +129,46 @@ paired with system groups to grant access to all pods run in the namespace:
   name: system:authenticated
 ```
 
-For more examples of RBAC bindings, see [Role Binding
-Examples](/docs/reference/access-authn-authz/rbac#role-binding-examples).
-For a complete example of authorizing a PodSecurityPolicy, see
-[below](#example).
+RBAC 바인딩에 대한 자세한 예는 [역할 바인딩 예제](/docs/reference/access-authn-authz/rbac#role-binding-examples)를 참고하길 바란다. PodSecurityPolicy 인증에 대한 전체 예제는
+[아래](#예제)를 참고하길 바란다.
 
 
-### Troubleshooting
+### 문제 해결
 
-- The [Controller Manager](/docs/admin/kube-controller-manager/) must be run
-against [the secured API port](/docs/reference/access-authn-authz/controlling-access/),
-and must not have superuser permissions. Otherwise requests would bypass
-authentication and authorization modules, all PodSecurityPolicy objects would be
-allowed, and users would be able to create privileged containers. For more details
-on configuring Controller Manager authorization, see [Controller
-Roles](/docs/reference/access-authn-authz/rbac/#controller-roles).
+- [컨트롤러 관리자](/docs/admin/kube-controller-manager/)는
+[보안 API 포트](/docs/reference/access-authn-authz/controlling-access/)에 대해 실행해야 하며
+슈퍼유저 권한이 없어야 한다. 그렇지 않으면 요청이 인증 및 권한 부여 모듈을 무시하고
+모든 PodSecurityPolicy 오브젝트가 허용되며
+사용자는 특권있는 컨테이너를 만들 수 있다. 컨트롤러 관리자 권한 구성에 대한 자세한
+내용은 [컨트롤러 역할](/docs/reference/access-authn-authz/rbac/#controller-roles)을
+참고하길 바란다.
 
-## Policy Order
+## 정책 순서
 
-In addition to restricting pod creation and update, pod security policies can
-also be used to provide default values for many of the fields that it
-controls. When multiple policies are available, the pod security policy
-controller selects policies according to the following criteria:
+파드 생성 및 업데이트를 제한할 뿐만 아니라 파드 보안 정책을 사용하여
+제어하는 ​​많은 필드에 기본값을 제공할 수도 있다. 여러 정책을
+사용할 수 있는 경우 파드 보안 정책 컨트롤러는
+다음 기준에 따라 정책을 선택한다.
 
-1. PodSecurityPolicies which allow the pod as-is, without changing defaults or
-   mutating the pod, are preferred.  The order of these non-mutating
-   PodSecurityPolicies doesn't matter.
-2. If the pod must be defaulted or mutated, the first PodSecurityPolicy
-   (ordered by name) to allow the pod is selected.
+1. 기본 설정을 변경하거나 파드를 변경하지 않고 파드를 있는 그대로 허용하는 PodSecurityPolicy가
+   선호된다. 이러한 비-변이(non-mutating) PodSecurityPolicy의
+   순서는 중요하지 않다.
+2. 파드를 기본값으로 설정하거나 변경해야 하는 경우 파드를 허용할 첫 번째 PodSecurityPolicy
+   (이름순)가 선택된다.
 
 {{< note >}}
-During update operations (during which mutations to pod specs are disallowed)
-only non-mutating PodSecurityPolicies are used to validate the pod.
+업데이트 작업 중(파드 스펙에 대한 변경이 허용되지 않는 동안) 비-변이 PodSecurityPolicy만
+파드의 유효성을 검사하는 데 사용된다.
 {{< /note >}}
 
-## Example
+## 예제
 
-_This example assumes you have a running cluster with the PodSecurityPolicy
-admission controller enabled and you have cluster admin privileges._
+_이 예에서는 PodSecurityPolicy 어드미션 컨트롤러가 활성화된 클러스터가 실행 중이고
+클러스터 관리자 권한이 있다고 가정한다._
 
-### Set up
+### 설정
 
-Set up a namespace and a service account to act as for this example. We'll use
-this service account to mock a non-admin user.
+이 예제와 같이 네임스페이스와 서비스 어카운트를 설정한다. 이 서비스 어카운트를 사용하여 관리자가 아닌 사용자를 조정한다.
 
 ```shell
 kubectl create namespace psp-example
@@ -185,30 +176,29 @@ kubectl create serviceaccount -n psp-example fake-user
 kubectl create rolebinding -n psp-example fake-editor --clusterrole=edit --serviceaccount=psp-example:fake-user
 ```
 
-To make it clear which user we're acting as and save some typing, create 2
-aliases:
+어떤 사용자로 활동하고 있는지 명확하게 하고 입력 내용을 저장하려면 2개의 별칭(alias)을 만든다.
 
 ```shell
 alias kubectl-admin='kubectl -n psp-example'
 alias kubectl-user='kubectl --as=system:serviceaccount:psp-example:fake-user -n psp-example'
 ```
 
-### Create a policy and a pod
+### 정책과 파드 생성
 
-Define the example PodSecurityPolicy object in a file. This is a policy that
-simply prevents the creation of privileged pods.
-The name of a PodSecurityPolicy object must be a valid
-[DNS subdomain name](/docs/concepts/overview/working-with-objects/names#dns-subdomain-names).
+파일에서 예제 PodSecurityPolicy 오브젝트를 정의한다. 이는 특권있는 파드를
+만들지 못하게 하는 정책이다.
+PodSecurityPolicy 오브젝트의 이름은 유효한
+[DNS 서브도메인 이름](/ko/docs/concepts/overview/working-with-objects/names#dns-서브도메인-이름)이어야한다.
 
 {{< codenew file="policy/example-psp.yaml" >}}
 
-And create it with kubectl:
+그리고 kubectl로 생성한다.
 
 ```shell
 kubectl-admin create -f example-psp.yaml
 ```
 
-Now, as the unprivileged user, try to create a simple pod:
+이제 권한이 없는 사용자로서 간단한 파드를 생성해보자.
 
 ```shell
 kubectl-user create -f- <<EOF
@@ -224,20 +214,19 @@ EOF
 Error from server (Forbidden): error when creating "STDIN": pods "pause" is forbidden: unable to validate against any pod security policy: []
 ```
 
-**What happened?** Although the PodSecurityPolicy was created, neither the
-pod's service account nor `fake-user` have permission to use the new policy:
+**무슨 일이 일어났나?** PodSecurityPolicy가 생성되었지만 파드의 서비스 어카운트나 `fake-user`는
+새 정책을 사용할 권한이 없다.
 
 ```shell
 kubectl-user auth can-i use podsecuritypolicy/example
 no
 ```
 
-Create the rolebinding to grant `fake-user` the `use` verb on the example
-policy:
+예제 정책에서 `fake-user`에게 `use` 동사를 부여하는 rolebinding을 생성한다.
 
 {{< note >}}
-This is not the recommended way! See the [next section](#run-another-pod)
-for the preferred approach.
+이 방법은 권장하지 않는다! 선호하는 방법은 [다음 절](#다른-파드를-실행)을
+참고하길 바란다.
 {{< /note >}}
 
 ```shell
@@ -256,7 +245,7 @@ kubectl-user auth can-i use podsecuritypolicy/example
 yes
 ```
 
-Now retry creating the pod:
+이제 파드 생성을 다시 시도하자.
 
 ```shell
 kubectl-user create -f- <<EOF
@@ -272,8 +261,7 @@ EOF
 pod "pause" created
 ```
 
-It works as expected! But any attempts to create a privileged pod should still
-be denied:
+예상대로 작동한다! 그러나 특권있는 파드를 만들려는 시도는 여전히 거부되어야 한다.
 
 ```shell
 kubectl-user create -f- <<EOF
@@ -291,15 +279,15 @@ EOF
 Error from server (Forbidden): error when creating "STDIN": pods "privileged" is forbidden: unable to validate against any pod security policy: [spec.containers[0].securityContext.privileged: Invalid value: true: Privileged containers are not allowed]
 ```
 
-Delete the pod before moving on:
+계속 진행하기 전에 파드를 삭제하자.
 
 ```shell
 kubectl-user delete pod pause
 ```
 
-### Run another pod
+### 다른 파드를 실행
 
-Let's try that again, slightly differently:
+약간 다르게 다르게 다시 시도해보자.
 
 ```shell
 kubectl-user run pause --image=k8s.gcr.io/pause
@@ -313,17 +301,16 @@ LASTSEEN   FIRSTSEEN   COUNT     NAME              KIND         SUBOBJECT       
 1m         2m          15        pause-7774d79b5   ReplicaSet                            Warning   FailedCreate            replicaset-controller                   Error creating: pods "pause-7774d79b5-" is forbidden: no providers available to validate pod request
 ```
 
-**What happened?** We already bound the `psp:unprivileged` role for our `fake-user`,
-why are we getting the error `Error creating: pods "pause-7774d79b5-" is
-forbidden: no providers available to validate pod request`? The answer lies in
-the source - `replicaset-controller`. Fake-user successfully created the
-deployment (which successfully created a replicaset), but when the replicaset
-went to create the pod it was not authorized to use the example
-podsecuritypolicy.
+**무슨 일이 일어났나?** 우리는 이미 `fake-user`에 대해 `psp:unprivileged` 역할을 바인딩했는데
+`Error creating: pods "pause-7774d79b5-" is
+forbidden: no providers available to validate pod request` 오류가
+발생하는 이유는 무엇인가? 그 답은 소스인 `replicaset-controller`에 있다. `fake-user`가
+디플로이먼트를 성공적으로 생성했지만(레플리카셋을 성공적으로 생성했음) 레플리카셋이
+파드를 생성했을 때 podsecuritypolicy 예제를
+사용할 권한이 없었다.
 
-In order to fix this, bind the `psp:unprivileged` role to the pod's service
-account instead. In this case (since we didn't specify it) the service account
-is `default`:
+이 문제를 해결하려면 `psp:unprivileged` 역할을 파드의 서비스 어카운트에 대신
+바인딩한다. 이 경우(지정하지 않았으므로) 서비스 어카운트는 `default`이다.
 
 ```shell
 kubectl-admin create rolebinding default:psp:unprivileged \
@@ -332,8 +319,8 @@ kubectl-admin create rolebinding default:psp:unprivileged \
 rolebinding "default:psp:unprivileged" created
 ```
 
-Now if you give it a minute to retry, the replicaset-controller should
-eventually succeed in creating the pod:
+이제 다시 한번 해본다면 replicaset-controller가
+파드를 성공적으로 생성해야 한다.
 
 ```shell
 kubectl-user get pods --watch
@@ -344,74 +331,73 @@ pause-7774d79b5-qrgcb   0/1       ContainerCreating   0         1s
 pause-7774d79b5-qrgcb   1/1       Running   0         2s
 ```
 
-### Clean up
+### 정리
 
-Delete the namespace to clean up most of the example resources:
+네임스페이스를 삭제하여 대부분의 예제 리소스를 정리한다.
 
 ```shell
 kubectl-admin delete ns psp-example
 namespace "psp-example" deleted
 ```
 
-Note that `PodSecurityPolicy` resources are not namespaced, and must be cleaned
-up separately:
+`PodSecurityPolicy` 리소스는 네임스페이스가 아니며 별도로
+정리해야 한다.
 
 ```shell
 kubectl-admin delete psp example
 podsecuritypolicy "example" deleted
 ```
 
-### Example Policies
+### 정책 예제
 
-This is the least restrictive policy you can create, equivalent to not using the
-pod security policy admission controller:
+이것은 파드 보안 정책 어드미션 컨트롤러를 사용하지 않는 것과 동일하게 만들 수 있는
+가장 제한적인 정책이다.
 
 {{< codenew file="policy/privileged-psp.yaml" >}}
 
-This is an example of a restrictive policy that requires users to run as an
-unprivileged user, blocks possible escalations to root, and requires use of
-several security mechanisms.
+이것은 사용자가 권한이 없는 사용자로 실행해야하고 루트로의 가능한 에스컬레이션을 차단하고
+여러 보안 메커니즘을 사용해야 하는 제한적인
+정책의 예제이다.
 
 {{< codenew file="policy/restricted-psp.yaml" >}}
 
-## Policy Reference
+## 정책 레퍼런스
 
-### Privileged
+### 특권
 
-**Privileged** - determines if any container in a pod can enable privileged mode.
-By default a container is not allowed to access any devices on the host, but a
-"privileged" container is given access to all devices on the host. This allows
-the container nearly all the same access as processes running on the host.
-This is useful for containers that want to use linux capabilities like
-manipulating the network stack and accessing devices.
+**Privileged** - 파드의 컨테이너가 특권 모드를 사용할 수 있는지 여부를 결정한다.
+기본적으로 컨테이너는 호스트의 모든 장치에 접근할 수 없지만
+"특권을 가진" 컨테이너는 호스트의 모든 장치에 접근할 수 있다. 이것은
+컨테이너가 호스트에서 실행되는 프로세스와 거의 동일한 접근을 허용한다.
+네트워크 스택 조작 및 장치 접근과 같은
+리눅스 기능을 사용하려는 컨테이너에 유용하다.
 
-### Host namespaces
+### 호스트 네임스페이스
 
-**HostPID** - Controls whether the pod containers can share the host process ID
-namespace. Note that when paired with ptrace this can be used to escalate
-privileges outside of the container (ptrace is forbidden by default).
+**HostPID** - 파드 컨테이너가 호스트 프로세스 ID 네임스페이스를 공유할 수 있는지 여부를
+제어한다. ptrace와 함께 사용하면 컨테이너 외부에서 권한을 에스컬레이션하는 데 사용할 수
+있다(ptrace는 기본적으로 금지되어 있음).
 
-**HostIPC** - Controls whether the pod containers can share the host IPC
-namespace.
+**HostIPC** - 파드 컨테이너가 호스트 IPC 네임스페이스를 공유할 수 있는지 여부를 제어한다.
 
-**HostNetwork** - Controls whether the pod may use the node network
-namespace. Doing so gives the pod access to the loopback device, services
-listening on localhost, and could be used to snoop on network activity of other
-pods on the same node.
+**HostNetwork** - 파드가 노드 네트워크 네임스페이스를 사용할 수 있는지 여부를 제어한다.
+이렇게 하면 파드에 루프백 장치에 접근하고 로컬 호스트에서 리스닝하는 서비스를 제공하며
+동일한 노드에 있는 다른 파드의 네트워크 활동을 스누핑하는 데
+사용할 수 있다.
 
-**HostPorts** - Provides a whitelist of ranges of allowable ports in the host
-network namespace. Defined as a list of `HostPortRange`, with `min`(inclusive)
-and `max`(inclusive). Defaults to no allowed host ports.
+**HostPorts** - 호스트 네트워크 네임스페이스에 허용되는 포트 범위의 화이트리스트를
+제공한다. `min`과 `max`를 포함하여 `HostPortRange`의 목록으로 정의된다.
+허용되지 않는 호스트 포트는 기본값은 호스트 포트를 허용하지 않는 것이다.
 
-### Volumes and file systems
+### 볼륨 및 파일시스템
 
-**Volumes** - Provides a whitelist of allowed volume types. The allowable values
-correspond to the volume sources that are defined when creating a volume. For
-the complete list of volume types, see [Types of
-Volumes](/docs/concepts/storage/volumes/#types-of-volumes). Additionally, `*`
-may be used to allow all volume types.
+**Volumes** - 허용되는 볼륨 유형의 화이트리스트를 제공한다. 허용 가능한 값은
+볼륨을 생성할 때 정의된 볼륨 소스에 해당한다. 볼륨 유형의 전체 목록은
+[볼륨 유형들](/ko/docs/concepts/storage/volumes/#볼륨-유형들)을 참고하길 바란다.
+또한 `*`를 사용하여 모든 볼륨 유형을
+허용할 수 있다.
 
-The **recommended minimum set** of allowed volumes for new PSPs are:
+새 PSP에 허용되는 볼륨의 **권장 최소 셋** 은 다음과 같다.
 
 - configMap
 - downwardAPI
@@ -421,27 +407,26 @@ The **recommended minimum set** of allowed volumes for new PSPs are:
 - projected
 
 {{< warning >}}
-PodSecurityPolicy does not limit the types of `PersistentVolume` objects that
-may be referenced by a `PersistentVolumeClaim`, and hostPath type
-`PersistentVolumes` do not support read-only access mode. Only trusted users
-should be granted permission to create `PersistentVolume` objects.
+PodSecurityPolicy는 `PersistentVolumeClaim`이 참조할 수 있는 `PersistentVolume`
+오브젝트의 유형을 제한하지 않으며 hostPath 유형
+`PersistentVolumes`은 읽기-전용 접근 모드를 지원하지 않는다. 신뢰할 수 있는 사용자만 `PersistentVolume` 오브젝트를 생성할 수 있는 권한을 부여 받아야 한다.
 {{< /warning >}}
 
-**FSGroup** - Controls the supplemental group applied to some volumes.
+**FSGroup** - 일부 볼륨에 적용되는 보충 그룹을 제어한다.
 
-- *MustRunAs* - Requires at least one `range` to be specified. Uses the
-minimum value of the first range as the default. Validates against all ranges.
-- *MayRunAs* - Requires at least one `range` to be specified. Allows
-`FSGroups` to be left unset without providing a default. Validates against
-all ranges if `FSGroups` is set.
-- *RunAsAny* - No default provided. Allows any `fsGroup` ID to be specified.
+- *MustRunAs* - 하나 이상의 `range`를 지정해야 한다. 첫 번째 범위의 최솟값을
+기본값으로 사용한다. 모든 범위에 대해 검증한다.
+- *MayRunAs* - 하나 이상의 `range`를 지정해야 한다. 기본값을 제공하지 않고
+`FSGroups`을 설정하지 않은 상태로 둘 수 있다. `FSGroups`이 설정된 경우 모든 범위에 대해
+유효성을 검사한다.
+- *RunAsAny* - 기본값이 제공되지 않았다. `fsGroup` ID를 지정할 수 있다.
 
-**AllowedHostPaths** - This specifies a whitelist of host paths that are allowed
-to be used by hostPath volumes. An empty list means there is no restriction on
-host paths used. This is defined as a list of objects with a single `pathPrefix`
-field, which allows hostPath volumes to mount a path that begins with an
-allowed prefix, and a `readOnly` field indicating it must be mounted read-only.
-For example:
+**AllowedHostPaths** - hostPath 볼륨에서 사용할 수 있는 호스트 경로의 화이트리스트를
+지정한다. 빈 목록은 사용된 호스트 경로에 제한이 없음을 의미한다.
+이는 단일 `pathPrefix` 필드가 있는 오브젝트 목록으로 정의되며, hostPath 볼륨은
+허용된 접두사로 시작하는 경로를 마운트할 수 있으며 `readOnly` 필드는
+읽기-전용으로 마운트되어야 함을 나타낸다.
+예를 들면 다음과 같습니다.
 
 ```yaml
 allowedHostPaths:
@@ -452,27 +437,27 @@ allowedHostPaths:
     readOnly: true # only allow read-only mounts
 ```
 
-{{< warning >}}There are many ways a container with unrestricted access to the host
-filesystem can escalate privileges, including reading data from other
-containers, and abusing the credentials of system services, such as Kubelet.
+{{< warning >}}
+호스트 파일시스템에 제한없이 접근할 수 있는 컨테이너는 다른 컨테이너에서 데이터를 읽고
+Kubelet과 같은 시스템 서비스의 자격 증명을 남용하는 등 권한을 에스컬레이션 할 수 있는
+여러 가지 방법이 있다.
 
-Writeable hostPath directory volumes allow containers to write
-to the filesystem in ways that let them traverse the host filesystem outside the `pathPrefix`.
-`readOnly: true`, available in Kubernetes 1.11+, must be used on **all** `allowedHostPaths`
-to effectively limit access to the specified `pathPrefix`.
+쓰기 가능한 hostPath 디렉토리 볼륨을 사용하면 컨테이너가 `pathPrefix` 외부에서
+호스트 파일시스템을 통과할 수 있는 방식으로 컨테이너가 파일시스템에 쓸 수 있다.
+쿠버네티스 1.11 이상 버전에서 사용 가능한 `readOnly: true`는 지정된 `pathPrefix`에 대한
+접근을 효과적으로 제한하기 위해 **모든** `allowedHostPaths`에서 사용해야 한다.
 {{< /warning >}}
 
-**ReadOnlyRootFilesystem** - Requires that containers must run with a read-only
-root filesystem (i.e. no writable layer).
+**ReadOnlyRootFilesystem** - 컨테이너는 읽기-전용 루트 파일시스템(즉, 쓰기 가능한 레이어 없음)으로 실행해야 한다.
 
-### FlexVolume drivers
+### FlexVolume 드라이버
 
-This specifies a whitelist of FlexVolume drivers that are allowed to be used
-by flexvolume. An empty list or nil means there is no restriction on the drivers.
-Please make sure [`volumes`](#volumes-and-file-systems) field contains the
-`flexVolume` volume type; no FlexVolume driver is allowed otherwise.
+flexvolume에서 사용할 수 있는 FlexVolume 드라이버의 화이트리스트를 지정한다.
+빈 목록 또는 nil은 드라이버에 제한이 없음을 의미한다.
+[`volumes`](#볼륨-및-파일시스템) 필드에 `flexVolume` 볼륨 유형이 포함되어
+있는지 확인한다. 그렇지 않으면 FlexVolume 드라이버가 허용되지 않는다.
 
-For example:
+예를 들면 다음과 같다.
 
 ```yaml
 apiVersion: policy/v1beta1
@@ -488,151 +473,146 @@ spec:
     - driver: example/cifs
 ```
 
-### Users and groups
+### 사용자 및 그룹
 
-**RunAsUser** - Controls which user ID the containers are run with.
+**RunAsUser** - 컨테이너를 실행할 사용자 ID를 제어힌다.
 
-- *MustRunAs* - Requires at least one `range` to be specified. Uses the
-minimum value of the first range as the default. Validates against all ranges.
-- *MustRunAsNonRoot* - Requires that the pod be submitted with a non-zero
-`runAsUser` or have the `USER` directive defined (using a numeric UID) in the
-image. Pods which have specified neither `runAsNonRoot` nor `runAsUser` settings
-will be mutated to set `runAsNonRoot=true`, thus requiring a defined non-zero 
-numeric `USER` directive in the container. No default provided. Setting 
-`allowPrivilegeEscalation=false` is strongly recommended with this strategy.
-- *RunAsAny* - No default provided. Allows any `runAsUser` to be specified.
+- *MustRunAs* - 하나 이상의 `range`를 지정해야 한다. 첫 번째 범위의 최솟값을
+기본값으로 사용한다. 모든 범위에 대해 검증한다.
+- *MustRunAsNonRoot* - 파드가 0이 아닌 `runAsUser`로 제출되거나
+이미지에 `USER` 지시문이 정의되어 있어야 한다(숫자 UID 사용). `runAsNonRoot` 또는
+`runAsUser` 설정을 지정하지 않은 파드는 `runAsNonRoot=true`를 설정하도록
+변경되므로 컨테이너에 0이 아닌 숫자가 정의된 `USER` 지시문이 필요하다. 기본값이 제공되지 않았다.
+이 전략에서는 `allowPrivilegeEscalation=false`를 설정하는 것이 좋다.
+- *RunAsAny* - 기본값이 제공되지 않았다. `runAsUser`를 지정할 수 있다.
 
-**RunAsGroup** - Controls which primary group ID the containers are run with.
+**RunAsGroup** - 컨테이너가 실행될 기본 그룹 ID를 제어합니다.
 
-- *MustRunAs* - Requires at least one `range` to be specified. Uses the
-minimum value of the first range as the default. Validates against all ranges.
-- *MayRunAs* - Does not require that RunAsGroup be specified. However, when RunAsGroup
-is specified, they have to fall in the defined range.
-- *RunAsAny* - No default provided. Allows any `runAsGroup` to be specified.
+- *MustRunAs* - 하나 이상의 `range`를 지정해야 한다. 첫 번째 범위의 최솟값을
+기본값으로 사용한다. 모든 범위에 대해 검증한다.
+- *MayRunAs* - `RunAsGroup`을 지정할 필요가 없다. 그러나 `RunAsGroup`을 지정하면
+정의된 범위에 속해야 한다.
+- *RunAsAny* - 기본값이 제공되지 않았다. `runAsGroup`을 지정할 수 있다.
 
 
-**SupplementalGroups** - Controls which group IDs containers add.
+**SupplementalGroups** - 컨테이너가 추가할 그룹 ID를 제어한다.
 
-- *MustRunAs* - Requires at least one `range` to be specified. Uses the
-minimum value of the first range as the default. Validates against all ranges.
-- *MayRunAs* - Requires at least one `range` to be specified. Allows
-`supplementalGroups` to be left unset without providing a default.
-Validates against all ranges if `supplementalGroups` is set.
-- *RunAsAny* - No default provided. Allows any `supplementalGroups` to be
-specified.
+- *MustRunAs* - 하나 이상의 `range`를 지정해야 한다. 첫 번째 범위의 최솟값을
+기본값으로 사용한다. 모든 범위에 대해 검증한다.
+- *MayRunAs* - 하나 이상의 `range`를 지정해야 한다. `supplementalGroups`에
+기본값을 제공하지 않고 설정하지 않은 상태로 둘 수 있다.
+`supplementalGroups`가 설정된 경우 모든 범위에 대해 유효성을 검증한다.
+- *RunAsAny* - 기본값이 제공되지 않았다. `supplementalGroups`을 지정할 수 있다.
 
-### Privilege Escalation
+### 권한 에스컬레이션
 
-These options control the `allowPrivilegeEscalation` container option. This bool
-directly controls whether the
+이 옵션은 `allowPrivilegeEscalation` 컨테이너 옵션을 제어한다. 이 bool은
+컨테이너 프로세스에서
 [`no_new_privs`](https://www.kernel.org/doc/Documentation/prctl/no_new_privs.txt)
-flag gets set on the container process. This flag will prevent `setuid` binaries
-from changing the effective user ID, and prevent files from enabling extra
-capabilities (e.g. it will prevent the use of the `ping` tool). This behavior is
-required to effectively enforce `MustRunAsNonRoot`.
+플래그가 설정되는지 여부를 직접 제어한다. 이 플래그는 `setuid` 바이너리가
+유효 사용자 ID를 변경하지 못하게 하고 파일에 추가 기능을 활성화하지 못하게
+한다(예: `ping` 도구 사용을 못하게 함). `MustRunAsNonRoot`를 효과적으로
+적용하려면 이 동작이 필요하다.
 
-**AllowPrivilegeEscalation** - Gates whether or not a user is allowed to set the
-security context of a container to `allowPrivilegeEscalation=true`. This
-defaults to allowed so as to not break setuid binaries. Setting it to `false`
-ensures that no child process of a container can gain more privileges than its parent.
+**AllowPrivilegeEscalation** - 사용자가 컨테이너의 보안 컨텍스트를
+`allowPrivilegeEscalation=true`로 설정할 수 있는지 여부를 게이트한다.
+이 기본값은 setuid 바이너리를 중단하지 않도록 허용한다. 이를 `false`로 설정하면
+컨테이너의 하위 프로세스가 상위 프로세스보다 더 많은 권한을 얻을 수 없다.
 
-**DefaultAllowPrivilegeEscalation** - Sets the default for the
-`allowPrivilegeEscalation` option. The default behavior without this is to allow
-privilege escalation so as to not break setuid binaries. If that behavior is not
-desired, this field can be used to default to disallow, while still permitting
-pods to request `allowPrivilegeEscalation` explicitly.
+**DefaultAllowPrivilegeEscalation** - `allowPrivilegeEscalation` 옵션의
+기본값을 설정한다. 이것이 없는 기본 동작은 setuid 바이너리를 중단하지 않도록
+권한 에스컬레이션을 허용하는 것이다. 해당 동작이 필요하지 않은 경우 이 필드를 사용하여
+기본적으로 허용하지 않도록 설정할 수 있지만 파드는 여전히 `allowPrivilegeEscalation`을
+명시적으로 요청할 수 있다.
 
-### Capabilities
+### 기능
 
-Linux capabilities provide a finer grained breakdown of the privileges
-traditionally associated with the superuser. Some of these capabilities can be
-used to escalate privileges or for container breakout, and may be restricted by
-the PodSecurityPolicy. For more details on Linux capabilities, see
-[capabilities(7)](http://man7.org/linux/man-pages/man7/capabilities.7.html).
+리눅스 기능은 전통적으로 슈퍼유저와 관련된 권한을 보다 세밀하게 분류한다.
+이러한 기능 중 일부는 권한 에스컬레이션 또는 컨테이너 분류에 사용될 수 있으며
+PodSecurityPolicy에 의해 제한될 수 있다. 리눅스 기능에 대한 자세한 내용은
+[기능(7)](http://man7.org/linux/man-pages/man7/capabilities.7.html)을
+참고하길 바란다.
 
-The following fields take a list of capabilities, specified as the capability
-name in ALL_CAPS without the `CAP_` prefix.
+다음 필드는 `CAP_` 접두사가 없는 모두 대문자로 된 기능 이름으로 지정된 기능 목록을 가져온다.
 
-**AllowedCapabilities** - Provides a whitelist of capabilities that may be added
-to a container. The default set of capabilities are implicitly allowed. The
-empty set means that no additional capabilities may be added beyond the default
-set. `*` can be used to allow all capabilities.
+**AllowedCapabilities** - 컨테이너에 추가될 수 있는 기능의 화이트리스트를 제공한다.
+기본 기능 셋는 내재적으로 허용된다. 비어있는 셋은 기본 셋 외에 추가 기능을 추가할 수 없음을
+의미한다. `*`는 모든 기능을 허용하는 데 사용할 수 있다.
 
-**RequiredDropCapabilities** - The capabilities which must be dropped from
-containers. These capabilities are removed from the default set, and must not be
-added. Capabilities listed in `RequiredDropCapabilities` must not be included in
-`AllowedCapabilities` or `DefaultAddCapabilities`.
+**RequiredDropCapabilities** - 컨테이너에서 삭제해야 하는 기능이다.
+이러한 기능은 기본 셋에서 제거되며 추가해서는 안된다.
+`RequiredDropCapabilities`에 나열된 기능은 `AllowedCapabilities` 또는
+`DefaultAddCapabilities`에 포함되지 않아야 한다.
 
-**DefaultAddCapabilities** - The capabilities which are added to containers by
-default, in addition to the runtime defaults. See the [Docker
-documentation](https://docs.docker.com/engine/reference/run/#runtime-privilege-and-linux-capabilities)
-for the default list of capabilities when using the Docker runtime.
+**DefaultAddCapabilities** - 런타임 기본값 외에 기본적으로 컨테이너에 추가되는 기능이다.
+도커 런타임을 사용할 때 기본 기능 목록은
+[도커 문서](https://docs.docker.com/engine/reference/run/#runtime-privilege-and-linux-capabilities)를
+참고하길 바란다.
 
 ### SELinux
 
-- *MustRunAs* - Requires `seLinuxOptions` to be configured. Uses
-`seLinuxOptions` as the default. Validates against `seLinuxOptions`.
-- *RunAsAny* - No default provided. Allows any `seLinuxOptions` to be
-specified.
+- *MustRunAs* - `seLinuxOptions`을 구성해야 한다.
+`seLinuxOptions`을 기본값으로 사용한다. `seLinuxOptions`에 대해 유효성을 검사한다.
+- *RunAsAny* - 기본값이 제공되지 않았다. `seLinuxOptions`를
+지정할 수 있다.
 
 ### AllowedProcMountTypes
 
-`allowedProcMountTypes` is a whitelist of allowed ProcMountTypes.
-Empty or nil indicates that only the `DefaultProcMountType` may be used.
+`allowedProcMountTypes`는 허용된 ProcMountTypes의 화이트리스트이다.
+비어 있거나 nil은 `DefaultProcMountType`만 사용할 수 있음을 나타낸다.
 
-`DefaultProcMount` uses the container runtime defaults for readonly and masked
-paths for /proc.  Most container runtimes mask certain paths in /proc to avoid
-accidental security exposure of special devices or information. This is denoted
-as the string `Default`.
+`DefaultProcMount`는 /proc의 읽기 전용 및 마스킹된 경로에 컨테이너 런타임 기본값을
+사용한다. 대부분의 컨테이너 런타임은 특수 장치나 정보가 실수로 보안에 노출되지 않도록
+/proc의 특정 경로를 마스킹한다. 이것은 문자열 `Default`로 표시된다.
 
-The only other ProcMountType is `UnmaskedProcMount`, which bypasses the
-default masking behavior of the container runtime and ensures the newly
-created /proc the container stays intact with no modifications. This is
-denoted as the string `Unmasked`.
+유일하게 다른 ProcMountType은 `UnmaskedProcMount`로, 컨테이너 런타임의
+기본 마스킹 동작을 무시하고 새로 작성된 /proc 컨테이너가 수정없이 그대로 유지되도록 한다.
+이 문자열은 `Unmasked`로 표시된다.
 
 ### AppArmor
 
-Controlled via annotations on the PodSecurityPolicy. Refer to the [AppArmor
-documentation](/docs/tutorials/clusters/apparmor/#podsecuritypolicy-annotations).
+PodSecurityPolicy의 어노테이션을 통해 제어된다. [AppArmor 문서](/docs/tutorials/clusters/apparmor/#podsecuritypolicy-annotations)를 참고하길 바란다.
 
 ### Seccomp
 
-The use of seccomp profiles in pods can be controlled via annotations on the
-PodSecurityPolicy. Seccomp is an alpha feature in Kubernetes.
+파드에서 seccomp 프로파일의 사용은 PodSecurityPolicy의 어노테이션을 통해
+제어할 수 있다. Seccomp는 쿠버네티스의 알파 기능이다.
 
-**seccomp.security.alpha.kubernetes.io/defaultProfileName** - Annotation that
-specifies the default seccomp profile to apply to containers. Possible values
-are:
+**seccomp.security.alpha.kubernetes.io/defaultProfileName** - 컨테이너에
+적용할 기본 seccomp 프로파일을 지정하는 어노테이션이다. 가능한 값은
+다음과 같다.
 
-- `unconfined` - Seccomp is not applied to the container processes (this is the
-  default in Kubernetes), if no alternative is provided.
-- `runtime/default` - The default container runtime profile is used.
-- `docker/default` - The Docker default seccomp profile is used. Deprecated as of
-  Kubernetes 1.11. Use `runtime/default` instead.
-- `localhost/<path>` - Specify a profile as a file on the node located at
-  `<seccomp_root>/<path>`, where `<seccomp_root>` is defined via the
-  `--seccomp-profile-root` flag on the Kubelet.
+- `unconfined` - 대안이 제공되지 않으면 Seccomp가 컨테이너 프로세스에 적용되지
+  않는다(쿠버네티스의 기본값임).
+- `runtime/default` - 기본 컨테이너 런타임 프로파일이 사용된다.
+- `docker/default` - 도커 기본 seccomp 프로파일이 사용된다. 쿠버네티스 1.11에서 더 이상
+  사용되지 않는다. 대신 `runtime/default`을 사용하라.
+- `localhost/<path>` - `<seccomp_root>/<path>`에 있는 노드에서 파일을 프로파일로
+  지정한다. 여기서 `<seccomp_root>`는 Kubelet의 `--seccomp-profile-root` 플래그를
+  통해 정의된다.
 
-**seccomp.security.alpha.kubernetes.io/allowedProfileNames** - Annotation that
-specifies which values are allowed for the pod seccomp annotations. Specified as
-a comma-delimited list of allowed values. Possible values are those listed
-above, plus `*` to allow all profiles. Absence of this annotation means that the
-default cannot be changed.
+**seccomp.security.alpha.kubernetes.io/allowedProfileNames** - 파드 seccomp
+어노테이션에 허용되는 값을 지정하는 어노테이션. 쉼표로 구분된
+허용된 값의 목록으로 지정된다. 가능한 값은 위에 나열된 값과
+`*`를 모두 사용하여모든 프로파일을 허용한다.
+이 주석이 없으면 기본값을 변경할 수 없다.
 
 ### Sysctl
 
-By default, all safe sysctls are allowed. 
+기본적으로 모든 안전한 sysctls가 허용된다.
 
-- `forbiddenSysctls` - excludes specific sysctls. You can forbid a combination of safe and unsafe sysctls in the list. To forbid setting any sysctls, use `*` on its own.
-- `allowedUnsafeSysctls` - allows specific sysctls that had been disallowed by the default list, so long as these are not listed in `forbiddenSysctls`.
+- `forbiddenSysctls` - 특정 sysctls를 제외한다. 목록에서 안전한 것과 안전하지 않은
+sysctls의 조합을 금지할 수 있다. 모든 sysctls 설정을 금지하려면 자체적으로 `*`를
+사용한다.
+- `allowedUnsafeSysctls` - `forbiddenSysctls`에 나열되지 않는 한 기본 목록에서
+허용하지 않은 특정 sysctls를 허용한다.
 
-Refer to the [Sysctl documentation](
-/docs/concepts/cluster-administration/sysctl-cluster/#podsecuritypolicy).
+[Sysctl 문서](/docs/concepts/cluster-administration/sysctl-cluster/#podsecuritypolicy)를 참고하길 바란다.
 
 {{% /capture %}}
 
 {{% capture whatsnext %}}
 
-Refer to [Pod Security Policy Reference](/docs/reference/generated/kubernetes-api/{{< param "version" >}}/#podsecuritypolicy-v1beta1-policy) for the api details.
+API 세부 정보는 [파드 보안 정책 레퍼런스](/docs/reference/generated/kubernetes-api/{{< param "version" >}}/#podsecuritypolicy-v1beta1-policy) 참조
 
 {{% /capture %}}
