@@ -1,9 +1,5 @@
 ---
-reviewers:
-- dchen1107
-- roberthbailey
-- liggitt
-title: Control Plane-Node Communication
+title: 컨트롤 플레인-노드 간 통신
 content_template: templates/concept
 weight: 20
 aliases:
@@ -12,59 +8,59 @@ aliases:
 
 {{% capture overview %}}
 
-This document catalogs the communication paths between the control plane (really the apiserver) and the Kubernetes cluster. The intent is to allow users to customize their installation to harden the network configuration such that the cluster can be run on an untrusted network (or on fully public IPs on a cloud provider).
+이 문서는 컨트롤 플레인(실제로는 API 서버)과 쿠버네티스 클러스터 사이에 대한 통신 경로의 목록을 작성한다. 이는 사용자가 신뢰할 수 없는 네트워크(또는 클라우드 공급자의 완전한 퍼블릭 IP)에서 클러스터를 실행할 수 있도록 네트워크 구성을 강화하기 위한 맞춤 설치를 할 수 있도록 한다.
 
 {{% /capture %}}
 
 {{% capture body %}}
 
-## Node to Control Plane
-All communication paths from the nodes to the control plane terminate at the apiserver (none of the other master components are designed to expose remote services). In a typical deployment, the apiserver is configured to listen for remote connections on a secure HTTPS port (443) with one or more forms of client [authentication](/docs/reference/access-authn-authz/authentication/) enabled.
-One or more forms of [authorization](/docs/reference/access-authn-authz/authorization/) should be enabled, especially if [anonymous requests](/docs/reference/access-authn-authz/authentication/#anonymous-requests) or [service account tokens](/docs/reference/access-authn-authz/authentication/#service-account-tokens) are allowed.
+## 노드에서 컨트롤 플레인으로의 통신
+노드에서 컨트롤 플레인까지의 모든 통신 경로는 API 서버에서 종료된다(다른 마스터 컴포넌트 중 어느 것도 원격 서비스를 노출하도록 설계되지 않았다). 일반적인 배포에서 API 서버는 하나 이상의 클라이언트 [인증](/docs/reference/access-authn-authz/authentication/) 형식이 활성화된 보안 HTTPS 포트(443)에서 원격 연결을 수신하도록 구성된다.
+특히 [익명의 요청](/docs/reference/access-authn-authz/authentication/#anonymous-requests) 또는 [서비스 어카운트 토큰](/docs/reference/access-authn-authz/authentication/#service-account-tokens)이 허용되는 경우, 하나 이상의 [권한 부여](/docs/reference/access-authn-authz/authorization/) 형식을 사용해야 한다.
 
-Nodes should be provisioned with the public root certificate for the cluster such that they can connect securely to the apiserver along with valid client credentials. For example, on a default GKE deployment, the client credentials provided to the kubelet are in the form of a client certificate. See [kubelet TLS bootstrapping](/docs/reference/command-line-tools-reference/kubelet-tls-bootstrapping/) for automated provisioning of kubelet client certificates.
+노드는 유효한 클라이언트 자격 증명과 함께 API 서버에 안전하게 연결할 수 있도록 클러스터에 대한 공개 루트 인증서로 프로비전해야 한다. 예를 들어, 기본 GKE 배포에서, kubelet에 제공되는 클라이언트 자격 증명은 클라이언트 인증서 형식이다. kubelet 클라이언트 인증서의 자동 프로비저닝은 [kubelet TLS 부트스트랩](/docs/reference/command-line-tools-reference/kubelet-tls-bootstrapping/)을 참고한다.
 
-Pods that wish to connect to the apiserver can do so securely by leveraging a service account so that Kubernetes will automatically inject the public root certificate and a valid bearer token into the pod when it is instantiated.
-The `kubernetes` service (in all namespaces) is configured with a virtual IP address that is redirected (via kube-proxy) to the HTTPS endpoint on the apiserver.
+API 서버에 연결하려는 파드는 쿠버네티스가 공개 루트 인증서와 유효한 베어러 토큰(bearer token)을 파드가 인스턴스화될 때 파드에 자동으로 주입하도록 서비스 어카운트를 활용하여 안전하게 연결할 수 있다.
+`kubernetes` 서비스(모든 네임스페이스의)는 API 서버의 HTTPS 엔드포인트로 리디렉션되는 가상 IP 주소(kube-proxy를 통해)로 구성되어 있다.
 
-The control plane components also communicate with the cluster apiserver over the secure port.
+컨트롤 플레인 컴포넌트는 보안 포트를 통해 클러스터 API 서버와도 통신한다.
 
-As a result, the default operating mode for connections from the nodes and pods running on the nodes to the control plane is secured by default and can run over untrusted and/or public networks.
+결과적으로, 노드 및 노드에서 실행되는 파드에서 컨트롤 플레인으로 연결하기 위한 기본 작동 모드는 기본적으로 보호되며 신뢰할 수 없는 네트워크 및/또는 공용 네트워크에서 실행될 수 있다.
 
-## Control Plane to node
-There are two primary communication paths from the control plane (apiserver) to the nodes. The first is from the apiserver to the kubelet process which runs on each node in the cluster. The second is from the apiserver to any node, pod, or service through the apiserver's proxy functionality.
+## 컨트롤 플레인에서 노드로의 통신
+컨트롤 플레인(API 서버)에서 노드로는 두 가지 기본 통신 경로가 있다. 첫 번째는 API 서버에서 클러스터의 각 노드에서 실행되는 kubelet 프로세스이다. 두 번째는 API 서버의 프록시 기능을 통해 API 서버에서 모든 노드, 파드 또는 서비스에 이르는 것이다.
 
-### apiserver to kubelet
-The connections from the apiserver to the kubelet are used for:
+### API 서버에서 kubelet으로의 통신
+API 서버에서 kubelet으로의 연결은 다음의 용도로 사용된다.
 
-* Fetching logs for pods.
-* Attaching (through kubectl) to running pods.
-* Providing the kubelet's port-forwarding functionality.
+* 파드에 대한 로그를 가져온다.
+* 실행 중인 파드에 (kubectl을 통해) 연결한다.
+* kubelet의 포트-포워딩 기능을 제공한다.
 
-These connections terminate at the kubelet's HTTPS endpoint. By default, the apiserver does not verify the kubelet's serving certificate, which makes the connection subject to man-in-the-middle attacks, and **unsafe** to run over untrusted and/or public networks.
+이 연결은 kubelet의 HTTPS 엔드포인트에서 종료된다. 기본적으로, API 서버는 kubelet의 서빙(serving) 인증서를 확인하지 않으므로, 연결이 중간자(man-in-the-middle) 공격의 대상이 되며, 신뢰할 수 없는 네트워크 및/또는 공용 네트워크에서 실행하기에 **안전하지 않다** .
 
-To verify this connection, use the `--kubelet-certificate-authority` flag to provide the apiserver with a root certificate bundle to use to verify the kubelet's serving certificate.
+이 연결을 확인하려면, `--kubelet-certificate-authority` 플래그를 사용하여 API 서버에 kubelet의 서빙 인증서를 확인하는 데 사용할 루트 인증서 번들을 제공한다.
 
-If that is not possible, use [SSH tunneling](/docs/concepts/architecture/master-node-communication/#ssh-tunnels) between the apiserver and kubelet if required to avoid connecting over an
-untrusted or public network.
+이것이 가능하지 않은 경우, 신뢰할 수 없는 네트워크 또는 공용 네트워크를 통한 연결을 피하기 위해 필요한 경우 API 서버와 kubelet 사이에 [SSH 터널링](/ko/docs/concepts/architecture/control-plane-node-communication/#ssh-터널)을
+사용한다.
 
-Finally, [Kubelet authentication and/or authorization](/docs/admin/kubelet-authentication-authorization/) should be enabled to secure the kubelet API.
+마지막으로, kubelet API를 보호하려면 [Kubelet 인증 및/또는 권한 부여](/docs/admin/kubelet-authentication-authorization/)를 활성화해야 한다.
 
-### apiserver to nodes, pods, and services
+### API 서버에서 노드, 파드 및 서비스로의 통신
 
-The connections from the apiserver to a node, pod, or service default to plain HTTP connections and are therefore neither authenticated nor encrypted. They can be run over a secure HTTPS connection by prefixing `https:` to the node, pod, or service name in the API URL, but they will not validate the certificate provided by the HTTPS endpoint nor provide client credentials so while the connection will be encrypted, it will not provide any guarantees of integrity. These connections **are not currently safe** to run over untrusted and/or public networks.
+API 서버에서 노드, 파드 또는 서비스로의 연결은 기본적으로 일반 HTTP 연결로 연결되므로 인증되거나 암호화되지 않는다. API URL에서 노드, 파드 또는 서비스 이름을 접두어 `https:` 로 사용하여 보안 HTTPS 연결을 통해 실행될 수 있지만, HTTPS 엔드포인트가 제공한 인증서의 유효성을 검증하지 않거나 클라이언트 자격 증명을 제공하지 않으므로 연결이 암호화되는 동안 무결성을 보장하지 않는다. 이러한 연결은 신뢰할 수 없는 네트워크 및/또는 공용 네트워크에서 실행하기에 **현재는 안전하지 않다** .
 
-### SSH tunnels
+### SSH 터널
 
-Kubernetes supports SSH tunnels to protect the control plane to nodes communication paths. In this configuration, the apiserver initiates an SSH tunnel to each node in the cluster (connecting to the ssh server listening on port 22) and passes all traffic destined for a kubelet, node, pod, or service through the tunnel.
-This tunnel ensures that the traffic is not exposed outside of the network in which the nodes are running.
+쿠버네티스는 SSH 터널을 지원하여 컨트롤 플레인에서 노드로의 통신 경로를 보호한다. 이 구성에서, API 서버는 클러스터의 각 노드에 SSH 터널을 시작하고(포트 22에서 수신 대기하는 ssh 서버에 연결) 터널을 통해 kubelet, 노드, 파드 또는 서비스로 향하는 모든 트래픽을 전달한다.
+이 터널은 트래픽이 노드가 실행 중인 네트워크 외부에 노출되지 않도록 한다.
 
-SSH tunnels are currently deprecated so you shouldn't opt to use them unless you know what you are doing. The Konnectivity service is a replacement for this communication channel.
+SSH 터널은 현재 더 이상 사용되지 않으므로 수행 중인 작업이 어떤 것인지 모른다면 사용하면 안된다. Konnectivity 서비스는 이 통신 채널을 대체한다.
 
-### Konnectivity service
+### Konnectivity 서비스
 {{< feature-state for_k8s_version="v1.18" state="beta" >}}
 
-As a replacement to the SSH tunnels, the Konnectivity service provides TCP level proxy for the control plane to Cluster communication. The Konnectivity consists of two parts, the Konnectivity server and the Konnectivity agents, running in the control plane network and the nodes network respectively. The Konnectivity agents initiate connections to the Konnectivity server and maintain the connections.
-All control plane to nodes traffic then goes through these connections.
+SSH 터널을 대체하는 Konnectivity 서비스는 컨트롤 플레인에서 클러스터 통신에 TCP 레벨 프록시를 제공한다. Konnectivity는 컨트롤 플레인 네트워크와 노드 네트워크에서 각각 실행되는 Konnectivity 서버와 Konnectivity 에이전트의 두 부분으로 구성된다. Konnectivity 에이전트는 Konnectivity 서버에 대한 연결을 시작하고 연결을 유지한다.
+그런 다음 컨트롤 플레인에서 노드로의 모든 트래픽은 이 연결을 통과한다.
 
-See [Konnectivity Service Setup](/docs/tasks/setup-konnectivity/) on how to set it up in your cluster.
+클러스터에서 설정하는 방법에 대해서는 [Konnectivity 서비스 설정](/docs/tasks/setup-konnectivity/)을 참조한다.
